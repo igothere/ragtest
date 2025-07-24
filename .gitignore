@@ -1,0 +1,4 @@
+.history
+__pycache__/
+test_bak.py
+postgres-data/
