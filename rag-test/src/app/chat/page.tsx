@@ -36,8 +36,7 @@ export default function AskPage() {
       const response = await axios.post("http://localhost:5001/chat", { question });
       setAnswer(response.data.answer); // AI 답변 저장
       setSources(response.data.sources); // 근거 문서 목록 저장
-    } catch (err: any)
-    {
+    } catch (err: any) {
       const errorMsg = err.response?.data?.error || "답변을 가져오는 중 오류가 발생했습니다.";
       setError(errorMsg);
     } finally {
@@ -49,7 +48,7 @@ export default function AskPage() {
     // Enter 키가 눌렸고, Shift 키는 눌리지 않았을 때
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault(); // 기본 동작(줄바꿈) 방지
-      
+
       // 로딩 중이 아닐 때만 form의 submit 이벤트를 강제로 발생시킴
       if (!isLoading) {
         // form에 id를 부여하고 해당 form을 직접 submit
@@ -71,7 +70,7 @@ export default function AskPage() {
             onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="데이터베이스에 저장된 문서를 기반으로 질문을 입력하세요..."
-            className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+            className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-black"
             rows={4}
             disabled={isLoading}
           />

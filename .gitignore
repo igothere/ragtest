@@ -2,3 +2,5 @@
 __pycache__/
 test_bak.py
 postgres-data/
+
+venv

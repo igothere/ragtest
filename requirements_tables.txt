@@ -1,0 +1,9 @@
+flask
+flask-cors
+requests
+psycopg2-binary
+sentence-transformers
+pdfminer.six
+pdfplumber
+pandas
+tabulate

@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  postgres:
+    image: ankane/pgvector:latest  # pgvector가 내장된 이미지
+    container_name: pgvector-db
+    environment:
+      POSTGRES_USER: eden
+      POSTGRES_PASSWORD: qwer123
+      POSTGRES_DB: ragtest
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
+

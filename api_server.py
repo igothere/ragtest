@@ -12,7 +12,7 @@ from rag import normalize_text
 # from werkzeug.utils import secure_filename
 
 # 설정
-UPLOAD_FOLDER = "/home/eden/study/docs"
+UPLOAD_FOLDER = "./docs"
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'md'}
 PROCESSING_SCRIPT = 'rag.py'
 
@@ -49,23 +49,56 @@ def upload_file():
             file.save(save_path)
             print(f"✅ 파일 저장 성공: {save_path} (원본: {original_filename})")
 
-            # 2. rag.py 스크립트에 고유 파일명과 원본 파일명을 모두 전달
+            # 2. 환경변수 설정
+            env = os.environ.copy()
+            env['OLLAMA_ENDPOINT'] = "https://api.hamonize.com/ollama/api/chat"
+            env['OLLAMA_MODEL'] = "airun-chat:latest"
+            env['USE_SUMMARIZATION_CHUNKING'] = "true"
+
+            # 3. rag.py 스크립트에 고유 파일명과 원본 파일명을 모두 전달
             print(f"🚀 {PROCESSING_SCRIPT} 실행하여 {unique_filename} 처리 시작...")
+            
+            # 가상환경의 python 경로 사용
+            python_path = os.path.join(os.getcwd(), 'venv', 'bin', 'python')
+            if not os.path.exists(python_path):
+                python_path = 'python'  # 가상환경이 없으면 기본 python 사용
+            
+            # 표 처리 RAG 스크립트 사용
+            table_script = 'rag_with_tables.py'
+            if os.path.exists(table_script):
+                script_to_use = table_script
+                print(f"  📊 표 처리 RAG 스크립트 사용: {script_to_use}")
+            else:
+                script_to_use = PROCESSING_SCRIPT
+                print(f"  📝 기본 RAG 스크립트 사용: {script_to_use}")
+            
             result = subprocess.run(
-                ['python', PROCESSING_SCRIPT, unique_filename, original_filename], # 인자 2개 전달
+                [python_path, script_to_use, unique_filename, original_filename], # 인자 2개 전달
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
+                env=env,  # 환경변수 전달
+                cwd=os.getcwd()  # 현재 디렉토리에서 실행
             )
             
             print(f"📜 스크립트 출력:\n{result.stdout}")
             return jsonify({"message": f"'{original_filename}' 파일 처리 성공", "output": result.stdout}), 200
 
         except subprocess.CalledProcessError as e:
-            print(f"❌ 스크립트 실행 오류: {e.stderr}")
-            return jsonify({"error": "파일 처리 중 오류 발생", "details": e.stderr}), 500
+            print(f"❌ 스크립트 실행 오류:")
+            print(f"   반환 코드: {e.returncode}")
+            print(f"   표준 출력: {e.stdout}")
+            print(f"   표준 에러: {e.stderr}")
+            return jsonify({
+                "error": "파일 처리 중 오류 발생", 
+                "details": e.stderr,
+                "stdout": e.stdout,
+                "returncode": e.returncode
+            }), 500
         except Exception as e:
             print(f"❌ 서버 오류: {e}")
+            import traceback
+            traceback.print_exc()
             return jsonify({"error": str(e)}), 500
             
     return jsonify({"error": "허용되지 않는 파일 형식입니다"}), 400
@@ -73,15 +106,15 @@ def upload_file():
   # --- 서버 시작 시 모델과 DB 설정을 미리 준비 ---
 print("🤖 RAG 검색용 임베딩 모델 로딩 중...")
 try:
-    model = SentenceTransformer("snunlp/KR-SBERT-V40K-klueNLI-augSTS")
+    model = SentenceTransformer("nlpai-lab/KURE-v1")
     print("✅ 검색용 모델 로딩 완료.")
 except Exception as e:
     print(f"❌ 모델 로딩 실패: {e}")
     model = None
 
 DB_CONFIG = {
-    "host": "localhost", "port": "5432", "dbname": "mydb",
-    "user": "eden", "password": "secret123"
+    "host": "localhost", "port": "5432", "dbname": "ragtest",
+    "user": "eden", "password": "qwer123"
 }
 
 # --- Ollama 설정 추가 ---

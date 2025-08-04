@@ -30,13 +30,6 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "airun-chat:latest")
 # -------------------------------------------------
 def normalize_text(text: str) -> str:
     """텍스트 정규화를 위한 함수"""
-    if not text:
-        return ""
-    
-    # 0. NULL 바이트 및 제어 문자 제거 (PostgreSQL 오류 방지)
-    text = text.replace('\x00', '')
-    text = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', text)
-    
     # 1. 소문자로 변환
     text = text.lower()
     
@@ -242,17 +235,6 @@ def chunk_text(text, chunk_size, overlap):
 
 # DB 삽입 함수 수정: original_filename 인자 추가
 def insert_chunk_to_db(cursor, title, content, embedding, source_file, original_filename, chunk_index, total_chunks):
-    # 모든 문자열 필드에서 NULL 바이트 제거
-    def clean_string(s):
-        if s is None:
-            return None
-        return str(s).replace('\x00', '').replace('\r', '').replace('\n\n\n', '\n\n')
-    
-    title = clean_string(title)
-    content = clean_string(content)
-    source_file = clean_string(source_file)
-    original_filename = clean_string(original_filename)
-    
     embedding_str = "[" + ",".join(map(str, embedding)) + "]"
     sql = """
         INSERT INTO documents (title, content, embedding, source_file, original_filename, chunk_index, total_chunks)
@@ -264,7 +246,6 @@ def insert_chunk_to_db(cursor, title, content, embedding, source_file, original_
         print(f"    ✅ DB 삽입 성공")
     except Exception as e:
         print(f"    ❌ DB 삽입 오류 발생: {e}")
-        print(f"    디버그 정보: title 길이={len(title) if title else 0}, content 길이={len(content) if content else 0}")
         raise
 
 # 파일 처리 함수 수정: original_filename 인자 추가

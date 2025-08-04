@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, ChangeEvent, FormEvent } from "react";
+import React, { useState, ChangeEvent, FormEvent } from "react";
 import axios from "axios";
 
 export default function Home() {
@@ -37,7 +37,7 @@ export default function Home() {
         },
         timeout: 300000, // 5분 타임아웃
       });
-      
+
       setStatus("success");
       setMessage(`성공: ${response.data.message}`);
       console.log("Server response:", response.data);
@@ -77,12 +77,9 @@ export default function Home() {
           </button>
         </form>
         {message && (
-          <div className={`mt-4 p-4 rounded-md text-sm ${
-              status === 'success' ? 'bg-green-100 text-green-800' : ''
-            } ${
-              status === 'error' ? 'bg-red-100 text-red-800' : ''
-            } ${
-              status === 'uploading' ? 'bg-yellow-100 text-yellow-800' : ''
+          <div className={`mt-4 p-4 rounded-md text-sm ${status === 'success' ? 'bg-green-100 text-green-800' : ''
+            } ${status === 'error' ? 'bg-red-100 text-red-800' : ''
+            } ${status === 'uploading' ? 'bg-yellow-100 text-yellow-800' : ''
             }`}
           >
             <pre className="whitespace-pre-wrap">{message}</pre>
