@@ -33,7 +33,7 @@ export default function AskPage() {
     setError("");
 
     try {
-      const response = await axios.post("http://localhost:5001/chat", { question });
+      const response = await axios.post("http://192.168.0.204:5001/chat", { question });
       setAnswer(response.data.answer); // AI 답변 저장
       setSources(response.data.sources); // 근거 문서 목록 저장
     } catch (err: any) {

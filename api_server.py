@@ -9,6 +9,7 @@ import requests # API 호출을 위해 추가
 import psycopg2
 from sentence_transformers import SentenceTransformer
 from rag import normalize_text 
+from model_manager import ModelManager, get_model_with_fallback, get_model_status, ModelAccessError
 # from werkzeug.utils import secure_filename
 
 # 설정
@@ -52,7 +53,7 @@ def upload_file():
             # 2. 환경변수 설정
             env = os.environ.copy()
             env['OLLAMA_ENDPOINT'] = "https://api.hamonize.com/ollama/api/chat"
-            env['OLLAMA_MODEL'] = "airun-chat:latest"
+            env['OLLAMA_MODEL'] = "gpt-oss:latest"
             env['USE_SUMMARIZATION_CHUNKING'] = "true"
 
             # 3. rag.py 스크립트에 고유 파일명과 원본 파일명을 모두 전달
@@ -106,8 +107,20 @@ def upload_file():
   # --- 서버 시작 시 모델과 DB 설정을 미리 준비 ---
 print("🤖 RAG 검색용 임베딩 모델 로딩 중...")
 try:
-    model = SentenceTransformer("nlpai-lab/KURE-v1")
-    print("✅ 검색용 모델 로딩 완료.")
+    # ModelManager를 통한 공유 모델 로딩
+    model_manager = ModelManager.get_instance()
+    model = model_manager.get_model()
+    print("✅ 공유 모델 로딩 완료.")
+    
+    # 모델 상태 로깅
+    status = model_manager.get_status()
+    if status:
+        print(f"   모델: {status.model_name}")
+        print(f"   로딩 시간: {status.load_time:.2f}초")
+        print(f"   메모리 사용량: ~{status.memory_usage}MB")
+        print(f"   디바이스: {status.device}")
+        if status.fallback_used:
+            print("   ⚠️  폴백 모드로 로딩됨")
 except Exception as e:
     print(f"❌ 모델 로딩 실패: {e}")
     model = None
@@ -119,14 +132,17 @@ DB_CONFIG = {
 
 # --- Ollama 설정 추가 ---
 OLLAMA_ENDPOINT = "https://api.hamonize.com/ollama/api/chat"
-OLLAMA_MODEL = "airun-chat:latest" # 사용하려는 Ollama 모델명
+OLLAMA_MODEL = "gpt-oss:latest" # 사용하려는 Ollama 모델명
 # -------------------------
 
 # 기존 ask_question 또는 chat 함수를 아래 내용으로 교체합니다.
 @app.route('/chat', methods=['POST'])
 def chat_with_doc():
-    if not model:
-        return jsonify({"error": "모델이 로드되지 않았습니다."}), 500
+    # 공유 모델 사용 (폴백 메커니즘 포함)
+    try:
+        current_model = get_model_with_fallback()
+    except ModelAccessError as e:
+        return jsonify({"error": f"모델에 접근할 수 없습니다: {str(e)}"}), 500
 
     data = request.get_json()
     if not data or 'question' not in data:
@@ -142,7 +158,7 @@ def chat_with_doc():
     try:
         # 1. 질문 벡터화 및 유사 문서 검색
         print("  - 1. 질문 벡터화 및 유사 문서 검색 중...")
-        question_embedding = model.encode(normalized_question).tolist()
+        question_embedding = current_model.encode(normalized_question).tolist()
         embedding_str = "[" + ",".join(map(str, question_embedding)) + "]"
 
         conn = psycopg2.connect(**DB_CONFIG)
@@ -226,6 +242,76 @@ All answers must be written in Korean.
         import traceback
         traceback.print_exc()
         return jsonify({"error": "답변 생성 중 서버에서 오류가 발생했습니다."}), 500
+
+
+@app.route('/model/status', methods=['GET'])
+def get_model_status():
+    """모델 상태 정보를 반환하는 엔드포인트"""
+    try:
+        manager = ModelManager.get_instance()
+        status = manager.get_status()
+        config = manager.get_config()
+        
+        if status:
+            return jsonify({
+                "status": "loaded" if status.is_loaded else "error",
+                "model_name": status.model_name,
+                "load_time": status.load_time,
+                "memory_usage_mb": status.memory_usage,
+                "device": status.device,
+                "fallback_used": status.fallback_used,
+                "retry_count": status.retry_count,
+                "error_message": status.error_message,
+                "error_type": status.error_type,
+                "config": {
+                    "name": config.name,
+                    "cache_dir": config.cache_dir,
+                    "device": config.device,
+                    "trust_remote_code": config.trust_remote_code
+                }
+            }), 200
+        else:
+            return jsonify({
+                "status": "not_loaded",
+                "message": "모델이 아직 로드되지 않았습니다."
+            }), 200
+            
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "error": str(e)
+        }), 500
+
+
+@app.route('/model/reload', methods=['POST'])
+def reload_model():
+    """모델을 다시 로드하는 엔드포인트"""
+    try:
+        manager = ModelManager.get_instance()
+        success = manager.reload_model()
+        
+        if success:
+            status = manager.get_status()
+            return jsonify({
+                "status": "success",
+                "message": "모델이 성공적으로 다시 로드되었습니다.",
+                "model_info": {
+                    "name": status.model_name if status else "unknown",
+                    "load_time": status.load_time if status else 0,
+                    "device": status.device if status else "unknown"
+                }
+            }), 200
+        else:
+            return jsonify({
+                "status": "error",
+                "message": "모델 재로드에 실패했습니다."
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "error": str(e)
+        }), 500
 
 
 if __name__ == '__main__':

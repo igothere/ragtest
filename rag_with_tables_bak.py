@@ -31,167 +31,166 @@ CHUNK_OVERLAP = 100
 
 # OLLAMA 설정
 OLLAMA_ENDPOINT = os.getenv("OLLAMA_ENDPOINT", "https://api.hamonize.com/ollama/api/chat")
-# OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "airun-chat:latest")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gpt-oss:latest")
-
-# def extract_pdf_with_tables(file_path: str) -> List[Dict[str, Any]]:
-#     """PDF에서 텍스트 + 표를 묶어 하나의 청크로 추출"""
-#     results = []
-
-#     try:
-#         with pdfplumber.open(file_path) as pdf:
-#             for page_num, page in enumerate(pdf.pages, 1):
-#                 print(f"  📄 페이지 {page_num} 분석 중...")
-
-#                 tables = page.extract_tables()
-#                 markdown_tables = []
-#                 searchable_table_texts = []
-
-#                 if tables:
-#                     for table_idx, table in enumerate(tables):
-#                         if table and len(table) > 1:
-#                             try:
-#                                 df = pd.DataFrame(table[1:], columns=table[0])
-#                                 df = df.dropna(how='all').dropna(axis=1, how='all')
-#                                 df = df.applymap(lambda x: str(x).replace('\x00', '') if pd.notna(x) else x)
-
-#                                 if not df.empty:
-#                                     markdown = df.to_markdown(index=False).replace('\x00', '')
-#                                     markdown_tables.append(f"[표 {table_idx + 1}]\n{markdown}")
-#                                     searchable_table_texts.append(create_table_searchable_text(df))
-#                                     print(f"    ✅ 표 발견: {len(df)}행 × {len(df.columns)}열")
-#                             except Exception as e:
-#                                 print(f"    ⚠️ 표 처리 오류: {e}")
-
-#                 text = page.extract_text()
-#                 clean_text = ''
-#                 if text and text.strip():
-#                     clean_text = text.replace('\x00', '')
-#                     clean_text = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', clean_text).strip()
-#                     print(f"    📝 텍스트: {len(clean_text)}자")
-
-#                 # 텍스트 + 표 합치기
-#                 full_content = ''
-#                 embedding_text = ''
-
-#                 if clean_text:
-#                     full_content += clean_text + "\n\n"
-#                     embedding_text += clean_text + "\n\n"
-#                 if markdown_tables:
-#                     full_content += "\n\n".join(markdown_tables)
-#                     embedding_text += "\n\n".join(searchable_table_texts)
-
-#                 if full_content.strip():
-#                     results.append({
-#                         'type': 'mixed',
-#                         'title': f'페이지 {page_num} 텍스트+표',
-#                         'content': full_content.strip(),
-#                         'embedding_text': embedding_text.strip(),
-#                         'metadata': {
-#                             'page': page_num,
-#                             'table_count': len(markdown_tables),
-#                             'has_tables': bool(markdown_tables)
-#                         }
-#                     })
-
-#     except Exception as e:
-#         print(f"  ❌ PDF 처리 중 오류: {e}")
-#         from pdfminer.high_level import extract_text
-#         text = extract_text(file_path)
-#         if text:
-#             results.append({
-#                 'type': 'text',
-#                 'title': '폴백 텍스트',
-#                 'content': text,
-#                 'embedding_text': text,
-#                 'metadata': {'fallback': True}
-#             })
-
-#     return results
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "airun-chat:latest")
 
 def extract_pdf_with_tables(file_path: str) -> List[Dict[str, Any]]:
-    """PDF에서 표와 텍스트를 구분하여 추출"""
+    """PDF에서 텍스트 + 표를 묶어 하나의 청크로 추출"""
     results = []
-    
+
     try:
         with pdfplumber.open(file_path) as pdf:
             for page_num, page in enumerate(pdf.pages, 1):
                 print(f"  📄 페이지 {page_num} 분석 중...")
-                
-                # 표 추출
+
                 tables = page.extract_tables()
-                
+                markdown_tables = []
+                searchable_table_texts = []
+
                 if tables:
                     for table_idx, table in enumerate(tables):
                         if table and len(table) > 1:
                             try:
-                                # 표를 DataFrame으로 변환
                                 df = pd.DataFrame(table[1:], columns=table[0])
                                 df = df.dropna(how='all').dropna(axis=1, how='all')
-                                
-                                # DataFrame의 모든 값에서 NULL 바이트 제거
                                 df = df.applymap(lambda x: str(x).replace('\x00', '') if pd.notna(x) else x)
-                                
+
                                 if not df.empty:
-                                    # 마크다운 변환 시에도 NULL 바이트 제거
-                                    markdown_content = df.to_markdown(index=False).replace('\x00', '')
-                                    
-                                    table_info = {
-                                        'type': 'table',
-                                        'page': page_num,
-                                        'table_index': table_idx + 1,
-                                        'content': markdown_content,
-                                        'searchable_text': create_table_searchable_text(df),
-                                        'metadata': {
-                                            'rows': len(df),
-                                            'columns': len(df.columns),
-                                            'column_names': [str(col).replace('\x00', '') for col in df.columns.tolist()]
-                                        }
-                                    }
-                                    results.append(table_info)
+                                    markdown = df.to_markdown(index=False).replace('\x00', '')
+                                    markdown_tables.append(f"[표 {table_idx + 1}]\n{markdown}")
+                                    searchable_table_texts.append(create_table_searchable_text(df))
                                     print(f"    ✅ 표 발견: {len(df)}행 × {len(df.columns)}열")
                             except Exception as e:
                                 print(f"    ⚠️ 표 처리 오류: {e}")
-                
-                # 텍스트 추출 (표 영역 제외는 복잡하므로 전체 텍스트 사용)
+
                 text = page.extract_text()
+                clean_text = ''
                 if text and text.strip():
-                    # NULL 바이트 및 제어 문자 제거
                     clean_text = text.replace('\x00', '')
-                    clean_text = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', clean_text)
-                    clean_text = clean_text.strip()
-                    
-                    if clean_text:
-                        # 표가 있는 페이지의 텍스트는 표 정보와 함께 저장
-                        has_tables = len([t for t in tables if t]) > 0
-                        text_info = {
-                            'type': 'text',
+                    clean_text = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', clean_text).strip()
+                    print(f"    📝 텍스트: {len(clean_text)}자")
+
+                # 텍스트 + 표 합치기
+                full_content = ''
+                embedding_text = ''
+
+                if clean_text:
+                    full_content += clean_text + "\n\n"
+                    embedding_text += clean_text + "\n\n"
+                if markdown_tables:
+                    full_content += "\n\n".join(markdown_tables)
+                    embedding_text += "\n\n".join(searchable_table_texts)
+
+                if full_content.strip():
+                    results.append({
+                        'type': 'mixed',
+                        'title': f'페이지 {page_num} 텍스트+표',
+                        'content': full_content.strip(),
+                        'embedding_text': embedding_text.strip(),
+                        'metadata': {
                             'page': page_num,
-                            'content': clean_text,
-                            'searchable_text': clean_text,
-                            'metadata': {
-                                'has_tables': has_tables,
-                                'table_count': len([t for t in tables if t])
-                            }
+                            'table_count': len(markdown_tables),
+                            'has_tables': bool(markdown_tables)
                         }
-                        results.append(text_info)
-                        print(f"    📝 텍스트: {len(clean_text)}자")
-    
+                    })
+
     except Exception as e:
         print(f"  ❌ PDF 처리 중 오류: {e}")
-        # 실패 시 기존 방식으로 폴백
         from pdfminer.high_level import extract_text
         text = extract_text(file_path)
         if text:
             results.append({
                 'type': 'text',
-                'page': 1,
+                'title': '폴백 텍스트',
                 'content': text,
-                'searchable_text': text,
+                'embedding_text': text,
                 'metadata': {'fallback': True}
             })
-    
+
     return results
+
+# def extract_pdf_with_tables(file_path: str) -> List[Dict[str, Any]]:
+#     """PDF에서 표와 텍스트를 구분하여 추출"""
+#     results = []
+    
+#     try:
+#         with pdfplumber.open(file_path) as pdf:
+#             for page_num, page in enumerate(pdf.pages, 1):
+#                 print(f"  📄 페이지 {page_num} 분석 중...")
+                
+#                 # 표 추출
+#                 tables = page.extract_tables()
+                
+#                 if tables:
+#                     for table_idx, table in enumerate(tables):
+#                         if table and len(table) > 1:
+#                             try:
+#                                 # 표를 DataFrame으로 변환
+#                                 df = pd.DataFrame(table[1:], columns=table[0])
+#                                 df = df.dropna(how='all').dropna(axis=1, how='all')
+                                
+#                                 # DataFrame의 모든 값에서 NULL 바이트 제거
+#                                 df = df.applymap(lambda x: str(x).replace('\x00', '') if pd.notna(x) else x)
+                                
+#                                 if not df.empty:
+#                                     # 마크다운 변환 시에도 NULL 바이트 제거
+#                                     markdown_content = df.to_markdown(index=False).replace('\x00', '')
+                                    
+#                                     table_info = {
+#                                         'type': 'table',
+#                                         'page': page_num,
+#                                         'table_index': table_idx + 1,
+#                                         'content': markdown_content,
+#                                         'searchable_text': create_table_searchable_text(df),
+#                                         'metadata': {
+#                                             'rows': len(df),
+#                                             'columns': len(df.columns),
+#                                             'column_names': [str(col).replace('\x00', '') for col in df.columns.tolist()]
+#                                         }
+#                                     }
+#                                     results.append(table_info)
+#                                     print(f"    ✅ 표 발견: {len(df)}행 × {len(df.columns)}열")
+#                             except Exception as e:
+#                                 print(f"    ⚠️ 표 처리 오류: {e}")
+                
+#                 # 텍스트 추출 (표 영역 제외는 복잡하므로 전체 텍스트 사용)
+#                 text = page.extract_text()
+#                 if text and text.strip():
+#                     # NULL 바이트 및 제어 문자 제거
+#                     clean_text = text.replace('\x00', '')
+#                     clean_text = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', clean_text)
+#                     clean_text = clean_text.strip()
+                    
+#                     if clean_text:
+#                         # 표가 있는 페이지의 텍스트는 표 정보와 함께 저장
+#                         has_tables = len([t for t in tables if t]) > 0
+#                         text_info = {
+#                             'type': 'text',
+#                             'page': page_num,
+#                             'content': clean_text,
+#                             'searchable_text': clean_text,
+#                             'metadata': {
+#                                 'has_tables': has_tables,
+#                                 'table_count': len([t for t in tables if t])
+#                             }
+#                         }
+#                         results.append(text_info)
+#                         print(f"    📝 텍스트: {len(clean_text)}자")
+    
+#     except Exception as e:
+#         print(f"  ❌ PDF 처리 중 오류: {e}")
+#         # 실패 시 기존 방식으로 폴백
+#         from pdfminer.high_level import extract_text
+#         text = extract_text(file_path)
+#         if text:
+#             results.append({
+#                 'type': 'text',
+#                 'page': 1,
+#                 'content': text,
+#                 'searchable_text': text,
+#                 'metadata': {'fallback': True}
+#             })
+    
+#     return results
 
 def create_table_searchable_text(df: pd.DataFrame) -> str:
     """표를 검색 가능한 텍스트로 변환"""
@@ -335,17 +334,17 @@ def process_file_with_tables(file_path, unique_filename, original_filename, mode
             return True
         
         # 구조화된 청크 생성
-        print("  🧩 구조화된 청크 생성 중...")
-        chunks = create_structured_chunks(extracted_data)
-        total_chunks = len(chunks)
+        # print("  🧩 구조화된 청크 생성 중...")
+        # chunks = create_structured_chunks(extracted_data)
+        # total_chunks = len(chunks)
         
-        print(f"  ✂️ {total_chunks}개의 청크로 분할 완료")
+        # print(f"  ✂️ {total_chunks}개의 청크로 분할 완료")
 
          # 구조화된 청크 생성
-        # print("  🧩 텍스트+표 통합 청크 생성 중...")
-        # chunks = extracted_data
-        # total_chunks = len(chunks)
-        # print(f"  ✂️ {total_chunks}개의 청크로 분할 완료")
+        print("  🧩 텍스트+표 통합 청크 생성 중...")
+        chunks = extracted_data
+        total_chunks = len(chunks)
+        print(f"  ✂️ {total_chunks}개의 청크로 분할 완료")
         
         # 각 청크를 임베딩하고 DB에 저장
         for i, chunk in enumerate(chunks):

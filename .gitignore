@@ -4,3 +4,5 @@ test_bak.py
 postgres-data/
 
 venv
+model_cache
+docs

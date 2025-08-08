@@ -31,7 +31,7 @@ export default function Home() {
 
     try {
       // Flask API 서버 주소로 요청
-      const response = await axios.post("http://localhost:5001/upload", formData, {
+      const response = await axios.post("http://192.168.0.204:5001/upload", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
